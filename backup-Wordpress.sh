@@ -1,172 +1,97 @@
 #!/bin/sh
 
-# Features we want
+# Create DB backup in the given location
+    # wp db export downloads/`date +%Y%m%d`_database.sql --add-drop-table --path=/var/www/upakhyana.com/htdocs/
+	# - Where to keep the db backups?
 
-## Accept the following
-    ### backup_dir (MANDATORY)
-    ### wordpress_location
-    ### wordpress_log_location
-    ### wordpress_db_location
-    ### site_name 
-    ### wp_db_name
-    ### wp_db_usename
-    ### wp_db_userpwd
-
-    ### borg pass-phrase (MANDATORY)
-    ### borg max-backup-size (MANDATORY)
-
-    ### log_rotate size
-    ### total log_size
-    ### log_off
-
-## Assume the following
-    ### backup_dir -> ~/backups/site_name
-    ### wordpress_location -> find it from nginx config
-        ### For more than 1 nginx sites -> prompt which one to use
-        ### backup all???
-    ### wordpress_log_location -> find it from nginx config
-    ### site_name -> find it from nginx config
-    ### wp_db_name -> get it from wordpress_location -> wp_config
-    ### wp_db_usename -> get it from wordpress_location -> wp_config
-    ### wp_db_userpwd -> get it from wordpress_location -> wp_config
-        # https://stackoverflow.com/questions/32400933/how-can-i-list-all-vhosts-in-nginx
-        # sudo nginx -T | perl -ln0777e '$,=$\; s/^\s*#.*\n//mg; print grep !$u{$_}++ && !m/^_$/, map m/(\S+)/g, m/\bserver_name\s++(.*?)\s*;/sg'
-        # sudo nginx -T | grep "server_name " | sed 's/.*server_name \(.*\);/\1/'
-            # -> Check if it starts with # (i.e. - deactivated)
-            # -> Check if it has a corresponding (uncommented out) "root" in the same {} or any of the included files in that {}
-
-## Fail on following
-    ### No sudo 
-    ### No nginx and no wordpress_location, wp_db_name, wp_db_username, wp_db_userpwd
-    ### If same script is currently running for the same site - fail
-
-## Create a DB backup and put it at tmp/wp_backup_script/site_name/db_bkp
-    ### Delete if already exists
-    ### mysqldump --user=username --password=password --opt DatabaseName > database.sql
-    ### delete it after successful backup creation
-    ### Run low-priority
-
-## Do a borg init - if it is not NOT done on the backup_dir
-    ### On init - show the key file on screen at the END (NOT on log)
-## Do a borg create with the timestamp
-    ### Run low-priority
-
-## Log all output to backup_dir/logs folder
-    ### Log rotate and delete if required
-    ### If log_off been mentioned - send logs to /dev/null
-
-## On ERROR -> output to backup_dir/logs/error
-    ### Add it to system log as well - even if log_off
+# Do Backup of the WP files + logfiles + Db Backup files
+	# - Borg - run it on lower priority with "nice"
+    # Compression? zlib?
+    # Pruning?
+    # Max size?
+    # Frequency?
+    # What needs to be excluded?
 
 
+# Sync the backup to remote using Rclone
+    # How about backup filling up space?
+    # What if the server gets hacked - can he delete everything from remote location as well?
 
-# For the README.md
-    ## Ensure you have sudo
-    ## If you have nginx and not providing the wordpress_location, wp_db_name, wp_db_username, wp_db_userpwd details - $ sudo nginx -t gives all OK
-    ## Ensure you have enough space at the backup location
-    ## If choosen to switch off log - check system error messages for "wp_backup_script_errors"
-    ## DB backup is created and stored in tmp/wp_backup_script/site_name/db_bkp 
-        ### This is deleted after successful backup
-    ## If you want to schedule it - put it in appropriate location
-        ### Explain where - give links for more details
-    ## Runs on low priority - so system resources are NOT overloaded
+# So root - no good
+[[ "$(id -u)" != "0" ]] && {
+    echo -e "ERROR: You must be root to run this script.\nPlease login as root and execute the script again."
+    exit 1
+}
 
+SCRIPT_NAME=wp_borg_backup
+SCRIPT_VERSION=0.1
 
-backup_name=wp-baseline
-backup_dir=/home/pratik/backup/borg/
-log_dir=/home/pratik/logs/borg/
-unique_identifier=pratik
+wp_src_dir=""
+wp_log_dir=""
+backup_dst_dir=""
+borg_passphrase=""
+storage_quota="5G" #if user provided - update this
+project_name=""
 
-#########################################################################
+TS=$(date '+%d_%m_%Y-%H_%M_%S')
+LOGFILE=/tmp/"$SCRIPT_NAME"_v"$SCRIPT_VERSION"_"$TS".log
 
-readonly backup_name
-readonly backup_dir
-readonly log_dir
-readonly unique_identifier
-
-# Setting this, so you won't be asked for your repository passphrase:
-export BORG_PASSPHRASE='d00x^UXryuEYTwPuZwQh'
-
-# Setting this, so the repo does not need to be given on the commandline:
-export BORG_REPO=$backup_dir$backup_name
-
-# some helpers and error handling:
-log_file=$log_dir$backup_name-$(date +%d%m%Y-%H%M%S)
-readonly log_file
-
-# if borg is currently running - stop sync
-if [ $(pidof borg | wc -w) -eq 1 ]
-then
-  echo "Another Backup is currently running. Exiting." >> $log_file 2>&1
-  exit 2
+# Install "borgbackup" if NOT installed
+if ! type borg 2>> "$LOGFILE" >&2; then
+    apt-get install -y borgbackup 2>> "$LOGFILE" >&2
 fi
 
-info() { printf "\n%s %s\n\n" "$( date )" "$*" >> $log_file 2>&1; }
-trap 'echo $( date ) Backup interrupted >> $log_file 2>&1; exit 2' INT TERM
+#If borg is running the same backup - quit
+if  (pidof -x borg > /dev/null) && $(pgrep -ac "$wp_src_dir") -gt 0 ; then
+    echo "${wp_src_dir} is being backed up from another process" | tee -a "$LOGFILE"
+    echo "This process will now exit" | tee -a "$LOGFILE"
+    exit 11
+fi
 
-info "Starting backup" >> $log_file 2>&1
+# Backup the DB
+if [[ -d ${backup_dst_dir}/DB ]]; then
+    mkdir ${backup_dst_dir}/DB 2>> "$LOGFILE" >&2
+fi
 
-# Backup the most important directories into an archive named after
-# the machine this script is currently running on:
+# Install wp-cli if not installed
+if ! type wp 2>> "$LOGFILE" >&2; then
+    echo -e "wp-cli not found on system. \nInstalling wp-cli" 2>> "$LOGFILE" >&2
+    wget https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -O /usr/local/bin/wp 2>> "$LOGFILE" >&2
+    chmod +x /usr/local/bin/wp 2>> "$LOGFILE" >&2
+fi
+
+# Backup WP database
+wp db export ${backup_dst_dir}/DB/"$TS"_database.sql --add-drop-table --path=${wp_src_dir} 2>> "$LOGFILE" >&2
+
+# If no passphrase provided and repo exists at the destination - Exit
+if [[ ( -z "$borg_passphrase") && (-f "$backup_dst_dir"/config || -d "$backup_dst_dir"/WP || -d "$backup_dst_dir"/WP/config) ]]; then
+    echo -e "You did not provide passphrase for this existing backup.\nProcess will exit now." | tee -a "$LOGFILE"
+    exit 12
+fi
+
+# Auto generate passphrase if no repo exists
+if [[ -z "$borg_passphrase" && ! -f "$backup_dst_dir"/config && ! -d "$backup_dst_dir"/WP && ! -d "$backup_dst_dir"/WP/config ]]; then
+    borg_passphrase=$(< /dev/urandom tr -cd 'a-zA-Z0-9~!@#$%^&*()_+-=' | head -c 20) # 20-character
+
+    mkdir "$backup_dst_dir"/WP 2>> "$LOGFILE" >&2
+
+    export BORG_NEW_PASSPHRASE="$borg_passphrase"
+
+    # Initalize the repo
+    borg init -v --encryption=repokey-blake2 --storage-quota "$storage_quota" "$backup_dst_dir"/WP 
+fi
+
+# Peform the actual backup
+export BORG_PASSPHRASE="$borg_passphrase"
+borg create \
+    "$backup_dst_dir"/WP::{hostname}_"$project_name"_"$TS" \
+    "$wp_src_dir"
+
 borg create                                             \
     --verbose                                           \
-    --filter AME                                        \
+    --filter AMEsd                                      \
     --list                                              \
+    --json                                              \
     --stats                                             \
     --show-rc                                           \
-    --compression zstd,3                                \
-    --exclude-caches                                    \
-    --exclude '/home/*/.cache/*'                        \
-    --exclude '/home/*/.local/share/Trash/*'            \
-    --exclude '/var/cache/*'                            \
-    --exclude '/var/tmp/*'                              \
-    --exclude "$backup_dir"                             \
-    --exclude "$log_file"                               \
-    ::"$unique_identifier-$backup_name-{now}"           \
-    /etc                                                \
-    /root                                               \
-    /var                                                \
-    /srv                                                \
-    /opt                                                \
-    /usr/local                                          \
-    /usr/share/nginx                                    \
-    /home                                               \
-    >> $log_file 2>&1                                   \
-
-backup_exit=$?
-
-info "Pruning repository" >> $log_file 2>&1
-
-# Use the `prune` subcommand to maintain 7 daily, 4 weekly and 6 monthly
-# archives of THIS machine. The '{hostname}-' prefix is very important to
-# limit prune's operation to this machine's archives and not apply to
-# other machines' archives also:
-
-borg prune                                       \
-    --list                                       \
-    --stats                                      \
-    --prefix "$unique_identifier-$backup_name"   \
-    --show-rc                                    \
-    --keep-within 2d                             \
-    --keep-last 5                                \
-    --keep-daily 7                               \
-    >> $log_file 2>&1                            \
-
-prune_exit=$?
-
-# use highest exit code as global exit code
-global_exit=$(( backup_exit > prune_exit ? backup_exit : prune_exit ))
-
-if [ ${global_exit} -eq 1 ];
-then
-    info "Backup and/or Prune finished with a warning" >> $log_file 2>&1
-fi
-
-if [ ${global_exit} -gt 1 ];
-then
-    info "Backup and/or Prune finished with an error" >> $log_file 2>&1
-fi
-
-echo Status Code - $global_exit >> $log_file 2>&1
-
-exit ${global_exit}
+    --compression zstd                                  \
