@@ -1,0 +1,67 @@
+# Create DB backup in the given location
+
+# Do Backup of the WP files + logfiles + Db Backup files
+    # Compression? zlib?
+    # Pruning?
+    # Max size?
+    # Frequency?
+    # What needs to be excluded?
+
+
+# Sync the backup to remote using Rclone
+    # How about backup filling up space?
+    # What if the server gets hacked - can he delete everything from remote location as well?
+
+
+#!/bin/sh
+
+# Features we want
+
+## Accept the following
+    ### backup_dir (MANDATORY)
+    ### wordpress_location
+    ### wordpress_log_location
+    ### site_name 
+
+## Assume the following
+    ### backup_dir -> ~/backups/site_name
+    ### wordpress_location -> find it from nginx config
+        ### For more than 1 nginx sites -> prompt which one to use
+        ### backup all???
+    ### include nginx config logs?
+    ### site_name -> find it from nginx config -> or from wordops?
+        # https://stackoverflow.com/questions/32400933/how-can-i-list-all-vhosts-in-nginx
+        # sudo nginx -T | perl -ln0777e '$,=$\; s/^\s*#.*\n//mg; print grep !$u{$_}++ && !m/^_$/, map m/(\S+)/g, m/\bserver_name\s++(.*?)\s*;/sg'
+        # sudo nginx -T | grep "server_name " | sed 's/.*server_name \(.*\);/\1/'
+            # -> Check if it starts with # (i.e. - deactivated)
+            # -> Check if it has a corresponding (uncommented out) "root" in the same {} or any of the included files in that {}
+
+## Do a borg init - if it is not NOT done on the backup_dir
+    ### On init - show the key file on screen at the END (NOT on log)
+
+## Log all output to backup_dir/logs folder
+    ### Log rotate and delete if required
+    ### If log_off been mentioned - send logs to /dev/null
+
+## On ERROR -> output to backup_dir/logs/error
+    ### Add it to system log as well - even if log_off
+
+
+
+# For the README.md
+    ## Ensure you have sudo
+    ## If you have nginx and not providing the wordpress_location, wp_db_name, wp_db_username, wp_db_userpwd details - $ sudo nginx -t gives all OK
+    ## Ensure you have enough space at the backup location
+    ## If choosen to switch off log - check system error messages for "wp_backup_script_errors"
+    ## DB backup is created and stored in tmp/wp_backup_script/site_name/db_bkp 
+        ### This is deleted after successful backup
+    ## If you want to schedule it - put it in appropriate location
+        ### Explain where - give links for more details
+    ## Runs on low priority - so system resources are NOT overloaded
+    ## Which compression we use
+    ## Which directories are excluded
+    ## What if you want to add some custom directories to this backups?
+    ## How to restore - for a particular date?
+    ## Point to rclone to sync these backups to remote locations
+    ## Point to init linux hardening for hardening linux servers
+    ## Point to WordOps for easier wordpress installations

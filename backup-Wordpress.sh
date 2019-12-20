@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Sync the backup to remote using Rclone
-    # How about backup filling up space?
-    # What if the server gets hacked - can he delete everything from remote location as well?
-
 # TODO
     # Display the archive name at the end
     # Display the log location at start AND at end
@@ -12,6 +8,7 @@
         # easily list the archives
         # Mount an archive
         # Health check
+    # Put the temp DB backup file in some other location
 
 # TODO - Accept the following mandatory parameters
     # --project-name | -pname
