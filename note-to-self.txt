@@ -65,3 +65,4 @@
     ## Point to rclone to sync these backups to remote locations
     ## Point to init linux hardening for hardening linux servers
     ## Point to WordOps for easier wordpress installations
+    ## MUST have a passphrase for your existing backup
