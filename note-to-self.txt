@@ -66,3 +66,42 @@
     ## Point to init linux hardening for hardening linux servers
     ## Point to WordOps for easier wordpress installations
     ## MUST have a passphrase for your existing backup
+
+
+
+#### Logging
+log requirements
+- Log to file always
+- Log to screen when specified
+- For warning & error - log to STDERR
+
+
+verbosity=3 # default to show warnings
+
+readonly silent_lvl=0
+readonly err_lvl=2
+readonly wrn_lvl=3
+readonly inf_lvl=4
+
+# If this variable is not overriden later - logfile will be stored at below location
+# /tmp/scriptname_date_timestamp_timezone.log
+LOGFILE=/tmp/$(basename "$0")_"$(date '+%Y-%m-%d_%H:%M:%S_%:::z')".log
+
+error() { log $err_lvl "ERROR: $1"; }
+warn() { log $wrn_lvl "WARNING: $1"; }
+inf() { log $inf_lvl "INFO: $1"; } # "info" is already a command
+log() {
+    if [[ "$verbosity" -ge "$1" && "$verbosity" -ne 0 ]]; then
+        local datestring
+
+        # Date format -> 2019-12-23 14:54:25+05:30 
+        readonly datestring="[$(date --rfc-3339=seconds)]:"
+        
+        # Expand escaped characters, wrap at 70 chars, indent wrapped lines
+        echo -e "$datestring $2" | fold -w80 -s | sed '2~1s/^/  /'
+    fi
+}
+
+file_log() {
+    echo $1 
+}

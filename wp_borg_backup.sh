@@ -1,4 +1,30 @@
 #!/usr/bin/env bash
+# ------------------------------------------------------------------
+# [Author] Pratik Kumar Tripathy
+
+# wp_borg_backup.sh:
+#
+#   - Installs, initializes and performs borg backup on Wordpress sites
+#   - More details at https://github.com/pratiktri/wordpress_borg_backup
+#
+# Usage:
+#
+#  $ sudo $0 --project-name "example.com" --wp-source-dir "/var/www/example.com" --backup-dir "/home/me/backup/example.com"
+#
+# Copyright 2019 [Pratik Kumar Tripathy]
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#        http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.--------------------------------
+
 
 # TODO
     # Keyshortcuts for 
@@ -7,13 +33,13 @@
         # Health check
 
     # Best Practice 
-        # A usage()
-        # Comment at top of the file explaining what it does
         # Enable Bash Strict mode
+        # Pretty print STDOUT
 
 # TODO - Check on other OSes
     # Ubuntu 16, 18, 18.08
-    # Debian 8, 9, 10
+    # Debian 8, 9
+    # Tested on Debian 10
 
 # No root - no good
 [[ "$(id --user)" != "0" ]] && {
@@ -27,33 +53,48 @@
     exit 2
 }
 
+
 usage() {
     cat <<USAGE
-    Usage:
-    sudo bash $0 --project-name <name> --wp-source-dir <path> --backup-dir <path> [--storage-quota <size>] [--passphrase-dir <path>]"
-    -u,     --username              Username for your server (If omitted script will choose an username for you)
-    -r,     --resetrootpwd          Reset current root password
-    -hide,  --hide-credentials      Credentials will hidden from screen and can ONLY be found in the logfile
-                                    eg: tail -n 20 logfile
-    -d,     --defaultsourcelist     Updates /etc/apt/sources.list to download software from debian.org
-    -ou,    --only-user             Only creates the user and its SSH authorizations
-                                    NOTE: -r, -d would be ignored
+Usage:
+    sudo $0 --project-name <name> --wp-source-dir <path> --backup-dir <path> [--storage-quota <size>] [--passphrase-dir <path>]"
+    -pname,         --project-name      A Unique name (usually the website name) for this backup
+    -wp_src,        --wp-source-dir     Directory where your WordPress website is stored
+    --backup-dir                        Directory where backup files will be stored
+    -quota,         --storage-quota     [Optional] Unlimited by default
+                                        When supplied backups would never exceed this capacity. 
+                                        Older backups will automatically be deleted to make room for new ones.
+    -passdir,       --passphrase-dir    [Optional] /home/[user]/.config/borg by default
+                                        Backups keys are stored (in plain-text) at this location.
+                                        Use "export BORG_PASSPHRASE" as shown in the example below to avoid saving passphrase to file.
+    -h,             --help              Display this information
 
-    export BORG_PASSPHRASE=<your-passphrase>
-    Example: bash ./$SCRIPT_NAME.sh --username myuseraccount --resetrootpwd
+    NOTE:- You MUST specify BORG_PASSPHRASE by export 
+
+    $ export BORG_PASSPHRASE=<your-passphrase>
+    $ sudo $0 --project-name "example.com" --wp-source-dir "/var/www/example.com" --backup-dir "/home/me/backup/example.com"  --storage-quota 5G --passphrase-dir /root/borg
 
 USAGE
-    exit 0
+
+    # If user asked to display this information - exit normally
+    if [[ ! "$#" -eq 0 ]]; then
+        exit 0
+    fi
 }
 
 
-main(){
-    local SCRIPT_VERSION, SCRIPT_NAME
-    readonly SCRIPT_VERSION=0.9, SCRIPT_NAME=wp_borg_backup
+main() {
+    local SCRIPT_VERSION
+    local SCRIPT_NAME
+    readonly SCRIPT_VERSION=1.0, SCRIPT_NAME=wp_borg_backup
 
     ################################# Parse Script Arguments #################################
 
-    local passphrase_dir, project_name, wp_src_dir, backup_dst_dir, storage_quota, passphrase_dir
+    local passphrase_dir
+    local project_name
+    local wp_src_dir
+    local backup_dst_dir
+    local storage_quota
 
     # By default, keep the passphrase file in the user's (the user that called this script) home directory
     # cause I don't want to pollute root user's home
@@ -108,13 +149,15 @@ main(){
                 ;;
             -h|--help)
                 echo
-                #TODO - implement the "usage" function
-                usage
+                usage OK
                 echo
                 exit 0
                 ;;
             *)
+                echo
                 echo "Unknown parameter encounted : $1 - this will be ignored"
+                echo
+                shift
                 ;;
         esac
     done
@@ -140,7 +183,7 @@ main(){
 
     # if blank - do something
     if [[ -n "${storage_quota}" ]]; then
-        storage_quota="--storage-quota ${storage_quota}"
+        storage_quota="--storage-quota=${storage_quota}"
     fi
     readonly storage_quota
 
@@ -150,7 +193,11 @@ main(){
 
 
     ######################################### Set up  #########################################
-    local bkp_log_dir, bkp_final_dir, bkp_DB_dir, TS, LOGFILE
+    local bkp_log_dir
+    local bkp_final_dir
+    local bkp_DB_dir
+    local TS
+    local LOGFILE
 
     # Create the backup directory structure
     mkdir -pv "${backup_dst_dir}"/{bkp_log,DB,WP} > /dev/null
@@ -253,8 +300,6 @@ main(){
         borg_passphrase=$(< /dev/urandom tr -cd 'a-zA-Z0-9@&_' | head -c 20) # 20-character
         readonly borg_passphrase
 
-        mkdir "${backup_dst_dir}"/WP >> "${LOGFILE}" 2>&1
-
         export BORG_NEW_PASSPHRASE="${borg_passphrase}"
 
         # Backup any recidual passphrase keys
@@ -276,9 +321,7 @@ main(){
 
         # Initalize the repo
         if (borg init --verbose \
-                    --encryption=repokey-blake2 \
-                    --storage-quota \
-                    "${storage_quota}" \
+                    --encryption=repokey-blake2 "${storage_quota}"  \
                     "${bkp_final_dir}" >> "${LOGFILE}" 2>&1); then
             echo "Repository initialized successfully" | tee -a "${LOGFILE}"
         else
