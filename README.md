@@ -1,15 +1,15 @@
-******# Wordpress Backup with Borgbackup
+# Wordpress Backup with Borgbackup
 
 Bash script that simplifies Borg backup for Wordpress websites.
 
 ## Purpose
 Make backup easy for a server running multiple Wordpress websites. 
 
-_borg_ is amazing backup solution, but if you have multiple websites running on the same server - you might have to create a script each for each of those websites. You would also need to spend sometime manually initializing a new repo for each of those websites, generate a passphrase, copy the passphrase immediately, _export_ the passphrase in a new script.
+_borg_ is an amazing backup solution, but if you have multiple websites running on the same server - you wpuld need to create a script each for those websites for automating _borg_ backup. You would also need to spend sometime manually initializing a new repo for each of those websites, generate a passphrase, copy the passphrase immediately, _export_ the passphrase in a new script.
 
 This script is designed specifically to ease those issues. You provide where your Wordpress is installed and where you want the backup to be stored and a unique name for the website - the script takes care of the rest. It'll create a strong enough passphrase, initialize the repo, then perform the actual backup.
 
-On subsequent executions, it'll read the passphrase file and perform an incremental backup.
+On subsequent executions, it'll read the passphrase file and perform an incremental backup.****
 
 ## Status
 
