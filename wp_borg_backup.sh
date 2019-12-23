@@ -69,7 +69,7 @@ Usage:
                                         Use "export BORG_PASSPHRASE" as shown in the example below to avoid saving passphrase to file.
     -h,             --help              Display this information
 
-    NOTE:- You MUST specify BORG_PASSPHRASE by export 
+    NOTE:- You MUST specify BORG_PASSPHRASE by export or by a passphrase file
 
     $ export BORG_PASSPHRASE=<your-passphrase>
     $ sudo $0 --project-name "example.com" --wp-source-dir "/var/www/example.com" --backup-dir "/home/me/backup/example.com"  --storage-quota 5G --passphrase-dir /root/borg
@@ -302,28 +302,29 @@ main() {
 
         export BORG_NEW_PASSPHRASE="${borg_passphrase}"
 
-        # Backup any recidual passphrase keys
-        if [[ -f "${passphrase_dir}/.${project_name}" ]]; then
-            mv "${passphrase_dir}/.${project_name}" "${passphrase_dir}/.${project_name}_old_${TS}"
-        fi
-
-        # chmod 400 the passphrase file
-        mkdir -p "${passphrase_dir}" >> "${LOGFILE}" 2>&1 && 
-            touch "${passphrase_dir}/.${project_name}" >> "${LOGFILE}" 2>&1 && 
-                chmod 440 "${passphrase_dir}/.${project_name}" >> "${LOGFILE}" 2>&1 && {
-                    # Display the passphrase on screen
-                    echo -e "\n############### BACKUP PASSPHRASE ###############" | tee -a "${LOGFILE}"
-                    echo "${borg_passphrase}" | 
-                        tee "${passphrase_dir}/.${project_name}" | tee -a "${LOGFILE}"
-                    echo "############### BACKUP PASSPHRASE ###############" | tee -a "${LOGFILE}"
-                    echo -e "You CANNOT access your backup without the above passphrase\n" | tee -a "${LOGFILE}"
-        }
-
         # Initalize the repo
         if (borg init --verbose \
                     --encryption=repokey-blake2 "${storage_quota}"  \
                     "${bkp_final_dir}" >> "${LOGFILE}" 2>&1); then
             echo "Repository initialized successfully" | tee -a "${LOGFILE}"
+
+            # Save passphrase to a file if Repo initialization succeeds
+            # Backup any recidual passphrase keys
+            if [[ -f "${passphrase_dir}/.${project_name}" ]]; then
+                mv "${passphrase_dir}/.${project_name}" "${passphrase_dir}/.${project_name}_old_${TS}"
+            fi
+
+            # chmod 400 the passphrase file
+            mkdir -p "${passphrase_dir}" >> "${LOGFILE}" 2>&1 && 
+                touch "${passphrase_dir}/.${project_name}" >> "${LOGFILE}" 2>&1 && 
+                    chmod 400 "${passphrase_dir}/.${project_name}" >> "${LOGFILE}" 2>&1 && {
+                        # Display the passphrase on screen
+                        echo -e "\n############### BACKUP PASSPHRASE ###############" | tee -a "${LOGFILE}"
+                        echo "${borg_passphrase}" | 
+                            tee "${passphrase_dir}/.${project_name}" | tee -a "${LOGFILE}"
+                        echo "############### BACKUP PASSPHRASE ###############" | tee -a "${LOGFILE}"
+                        echo -e "You CANNOT access your backup without the above passphrase\n" | tee -a "${LOGFILE}"
+            }
         else
             echo "ERROR: Backup initialization failed. Check the logfile for more details." 2>STDERR | tee -a "${LOGFILE}"
         fi
