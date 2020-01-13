@@ -3,13 +3,14 @@
 Bash script that simplifies Borg backup for Wordpress websites.
 
 ## Purpose
-Make backup easy for a server running multiple Wordpress websites. 
 
-_borg_ is an amazing backup solution, but if you have multiple websites running on the same server - you wpuld need to create a script each for those websites for automating _borg_ backup. You would also need to spend sometime manually initializing a new repo for each of those websites, generate a passphrase, copy the passphrase immediately, _export_ the passphrase in a new script.
+Make backup easy for a server running multiple Wordpress websites.
 
-This script is designed specifically to ease those issues. You provide where your Wordpress is installed and where you want the backup to be stored and a unique name for the website - the script takes care of the rest. It'll create a strong enough passphrase, initialize the repo, then perform the actual backup.
+_borg_ is an amazing backup solution, but if you have multiple websites running on the same server - you would need to create a script for each of those websites, for automating _borg_ backup. You would also need to spend sometime manually initializing a new repo for each of those websites, generate a passphrase for each, copy the passphrases immediately, `export` the passphrases in a new script.
 
-On subsequent executions, it'll read the passphrase file and perform an incremental backup.****
+This script eases those issues. Provide where your Wordpress is installed and where you want the backup to be stored and a unique name for the website - this script takes care of the rest. It'll create a strong enough passphrase, initialize the repo, then perform the actual backup.
+
+On subsequent executions, it'll read the passphrase file and perform an incremental backup.
 
 ## Status
 
@@ -19,8 +20,9 @@ NEEDS FURTHER TESTING.
 ## Usage
 
 ### Prerequisites
-- Any Linux distribution that support "_apt_"
-- A user having _sudo_ access to the server
+
+-   Any Linux distribution that support `apt`
+-   A user having `sudo` access to the server
 
 ### Examples
 
@@ -35,7 +37,7 @@ $ wget -q https://raw.githubusercontent.com/pratiktri/wordpress_borg_backup
 
 ### Available Options
 
-Run the script with below option (--help or -h) to see all available options:-
+Run the script with below option (`--help` or `-h`) to see all available options:-
 
 ```console
 $ sudo ./wp_borg_backup.sh --help
@@ -46,7 +48,7 @@ Usage:
     -wp_src,        --wp-source-dir     Directory where your WordPress website is stored
     --backup-dir                        Directory where backup files will be stored
     -quota,         --storage-quota     [Optional] Unlimited by default
-                                        When supplied backups would never exceed this capacity. 
+                                        When supplied backups would never exceed this capacity.
                                         Older backups will automatically be deleted to make room for new ones.
     -passdir,       --passphrase-dir    [Optional] /home/[user]/.config/borg by default
                                         Backups keys are stored (in plain-text) at this location.
@@ -61,33 +63,39 @@ Usage:
 
 ### What does the script do?
 
-- Install _borgbackup_ if not installed
-- Install _wp-cli_ if not installed
-- Backup the Wordpress database using _wp-cli_ 
-- Initialize _borg_ repository if --backup-dir is empty
-  - Generates a passphrase
-  - Saves the passphrase to /home/[user]/.config/borg directory
-  - Secures the passphrase file by "chmod 400"
-- Performs the backup
+-   Install _**borgbackup**_ if not installed
+-   Install _**wp-cli**_ if not installed
+-   Backup the Wordpress database using _**wp-cli**_
+-   Initialize _**borg**_ repository if **--backup-dir** is empty
+    -   Generates a passphrase
+    -   Saves the passphrase to **/home/[user]/.config/borg** directory
+    -   Secures the passphrase file by making it readable only to the root user (`chmod 400`)
+-   Performs the backup
 
 ## FAQ
-Q - Is the passphrase saved on the server in plain-text
 
-Ans - Yes. 
+Q - Is the passphrase saved on the server in plain-text?
+
+Ans - Yes.
 
 However, it does restrict access to the file only to _root_ user. If someone has access to your server and can access a file restricted to _root_ - then they would just go to the website folder itself to do any damage. You should sync your backup regularly to other locations for more protection.
-      
- If you do not like that, edit the script to add the following line to top of the file.
+
+If you do not like that, edit the script to add the following line to top of the file.
 
 ```
     export BORG_PASSPHRASE=[your-passphrase]
 ```
 
+Q - Does this auto schedule backup
+
+Ans - No
+
+You would need to do that manually.
 
 ### Roadmap
 
 -   [ ] Pretty print console output
--   [ ] Test on 
+-   [ ] Test on
     -   [ ] Ubuntu 18.08
     -   [ ] Ubuntu 18.04
     -   [ ] Ubuntu 16.04
@@ -109,4 +117,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-**

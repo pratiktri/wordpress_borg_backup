@@ -33,13 +33,22 @@
         # Health check
 
     # Best Practice 
-        # Enable Bash Strict mode
         # Pretty print STDOUT
 
 # TODO - Check on other OSes
     # Ubuntu 16, 18, 18.08
     # Debian 8, 9
     # Tested on Debian 10
+
+#### Bash Strict mode
+# Catch the error in case mysqldump fails (but gzip succeeds) in `mysqldump |gzip`
+set -o pipefail
+# Exit on error. Append "|| true" if you expect an error.
+set -o errexit
+# Do not allow use of undefined vars. Use ${VAR:-} to use an undefined VAR
+set -o nounset
+# Exit on error inside any functions or subshells.
+set -o errtrace
 
 # No root - no good
 [[ "$(id --user)" != "0" ]] && {
@@ -162,7 +171,7 @@ main() {
         esac
     done
 
-    # Check if mandatory items were provided or not
+    # Check if mandatory items were provided
     if [[ -z "${project_name}" ]]; then
         echo "ERROR: Script requires a project name (--project-name | -pname) parameter" 2>STDERR
         usage
@@ -181,7 +190,7 @@ main() {
         exit 8
     fi
 
-    # if blank - do something
+    # if blank - do nothing
     if [[ -n "${storage_quota}" ]]; then
         storage_quota="--storage-quota=${storage_quota}"
     fi
@@ -226,7 +235,7 @@ main() {
         fi
     fi
 
-    #If borg is currently running AND it is backing up the same website - quit
+    # If borg is currently running AND is backing up the same website -> quit
     if  (pidof -x borg > /dev/null) && $(pgrep --list-full --count "${wp_src_dir}") -gt 0 ; then
         echo "${wp_src_dir} is being backed up from another process"  2>STDERR | tee -a "${LOGFILE}"
         echo "This process will now exit"  2>STDERR | tee -a "${LOGFILE}"
@@ -241,7 +250,7 @@ main() {
             echo "Successfully Installed wp-cli" | tee -a "${LOGFILE}"
         else
             wp_cli_installed="$?"
-            echo "ERROR: Could not install wp-cli. Program will continue to backup the site data..." 2>STDERR | tee -a "${LOGFILE}"
+            echo "ERROR: Could not install wp-cli. Script will continue to backup the site data..." 2>STDERR | tee -a "${LOGFILE}"
         fi
     fi
 
@@ -260,6 +269,7 @@ main() {
         readonly directory_owner=$(stat --format='%U' "${wp_src_dir}")
         sudo -u "${directory_owner}" wp db --quiet export "/tmp/${TS}_database.sql" --add-drop-table --path="${wp_src_dir}"
 
+        # Extra mv step required as the owner of the wordpress directory (sudo -u) may not have access to backup directory
         if mv "/tmp/${TS}"_database.sql "${bkp_DB_dir}/${TS}_database.sql" >> "${LOGFILE}" 2>&1; then
             echo "DB backed up successfully" | tee -a "${LOGFILE}"
         else 
@@ -334,7 +344,7 @@ main() {
     export BORG_PASSPHRASE="${borg_passphrase}"
 
     # Do the actual backup
-    # We run it on a lower priority so it does not disturb others
+    # We run it on a lower IO priority so it does not disturb other processes
     if  ionice -c 2 -n 7 borg create                                \
             --verbose                                               \
             --filter AMEsd                                          \
